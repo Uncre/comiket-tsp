@@ -163,7 +163,11 @@ fn run_solve(args: SolveArgs) -> anyhow::Result<()> {
         println!(
             "Skipped {} unmatched want-list entr{}.",
             resolved.missing.len(),
-            if resolved.missing.len() == 1 { "y" } else { "ies" }
+            if resolved.missing.len() == 1 {
+                "y"
+            } else {
+                "ies"
+            }
         );
     }
     Ok(())

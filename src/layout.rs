@@ -276,8 +276,7 @@ impl Resolved {
 
 /// Join a want-list against a layout, preserving want-list order and collecting misses.
 pub fn resolve_wants(layout: &Layout, wants: &[WantEntry]) -> Resolved {
-    let index: HashMap<&str, &Space> =
-        layout.spaces.iter().map(|s| (s.id.as_str(), s)).collect();
+    let index: HashMap<&str, &Space> = layout.spaces.iter().map(|s| (s.id.as_str(), s)).collect();
     let mut resolved = Resolved::default();
     for want in wants {
         if let Some(&space) = index.get(want.space.as_str()) {

@@ -16,6 +16,10 @@ thiserror = "2.0.18"
 [dev-dependencies]
 criterion = "0.8.2"
 
+[[bench]]
+name = "solve"
+harness = false
+
 [profile.release]
 lto = "thin"
 codegen-units = 1

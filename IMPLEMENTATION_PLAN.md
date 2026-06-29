@@ -89,12 +89,27 @@ then a nonlinear squash so long legs and building/hall crossings dominate.
 
 ```rust
 fn perceived(a: &Space, b: &Space) -> f64 {
-    let mut d = manhattan(a.coord, b.coord);          // base walking meters
+    // Same-island legs use an around-the-nearer-end walk (you can't cut through the
+    // tables); everything else uses global Manhattan. See `intra_island` below.
+    let mut d = if same_island(a, b) { intra_island(a, b) }
+                else                 { manhattan(a.coord, b.coord) };  // base walking meters
     d += if a.building != b.building { 250.0 }         // cross-building: galleria/security
          else if a.hall  != b.hall  { 40.0 }            // cross-hall
          else if a.block != b.block { 5.0 }             // adjacent island (one aisle)
-         else { 0.0 };
+         else { 0.0 };                                  // same island
     d.powf(GAMMA)                                       // GAMMA = 1.25
+}
+
+// Within one island: same face → straight along the aisle; opposite faces → round
+// whichever island end is nearer (L = island_len). This fixes Manhattan's
+// underestimate of the opposite-face walk without overestimating near-end pairs.
+fn intra_island(a: &Space, b: &Space) -> f64 {
+    let dcross = (a.cross - b.cross).abs();
+    if a.face == b.face { (a.along - b.along).abs() + dcross }
+    else {
+        let (near, far) = (a.along + b.along, (L - a.along) + (L - b.along));
+        near.min(far) + dcross
+    }
 }
 ```
 
@@ -107,9 +122,10 @@ flags (`--gamma`, `--pen-building`, …) with the defaults above.
 Caveats to encode as comments/tests:
 - `powf` breaks the triangle inequality → metric-based bounds (Christofides) don't
   apply. Fine: 2-opt / Or-opt / SA / ILS work on arbitrary cost matrices.
-- Manhattan underestimates the walk-around between the two faces of the *same*
-  island. Acceptable for 概算; optionally add a small same-island-opposite-face
-  penalty later.
+- Same-island opposite-face walks are modelled exactly by `intra_island` (round the
+  nearer island end), so Manhattan's underestimate there does not apply. Manhattan is
+  still used for *cross*-island legs (it ignores obstacles between islands — acceptable
+  for 概算).
 - The matrix is symmetric for now. Keep the type asymmetric-ready (`d[i][j]`) so a
   future one-way-aisle model is a data change, not a code change.
 
@@ -118,15 +134,18 @@ Caveats to encode as comments/tests:
 ## 4. CLI design (clap, derive)
 
 ```
-comiket-tsp gen-layout --blocks <csv> --out <json>
+comiket-tsp gen-layout --blocks <csv> --out <json> [--event <name>]
 comiket-tsp solve      --spaces <json> --want <csv> --out <csv>
-                       [--seed 42] [--restarts 16] [--time-ms 800]
+                       [--seed 42] [--restarts 16] [--time-ms 800] [--max-iters 100000]
                        [--start <SpaceId>] [--closed]
                        [--gamma 1.25] [--pen-building 250] [--pen-hall 40] [--pen-block 5]
 ```
 
-- `--start` fixes the first node (your arrival gate). Default: solver picks best.
+- `--start` fixes the first stop; it must be a space present in the want-list. Default:
+  solver picks the best start.
 - `--closed` returns to the start (round trip). Default: open path.
+- `--max-iters` caps ILS iterations per restart and is the deterministic stopping rule.
+  `--time-ms 0` disables the wall-clock limit, making runs byte-identical for a seed.
 
 ---
 
@@ -243,33 +262,40 @@ W1-あ-12b,Example Circle
   "event": "C107",
   "spaces": [
     { "id": "E4-ア-31a", "building": "East", "hall": 4,
-      "block": "ア", "number": 31, "side": "A", "x": 12.0, "y": 33.0 }
+      "block": "ア", "number": 31, "side": "A",
+      "x": 12.0, "y": 33.0,
+      "along": 30.0, "cross": 0.0, "face": 0, "island_len": 47.0 }
   ]
 }
 ```
+
+`x`/`y` are global metres (cross-island Manhattan). `along`/`cross` are local island
+metres, `face` ∈ {0,1}, and `island_len` (= `(max_face_len - 1) * pitch`) the island's
+far-end along-position — all four feed the same-island `intra_island` model, so `solve`
+never re-reads `block_layout.csv`. `event` is optional (omitted when not given).
 
 ---
 
 ## 8. Phased task list (work top to bottom)
 
-- [ ] **P0 — scaffold.** `cargo new`, add deps, wire `clap` subcommands as stubs,
+- [x] **P0 — scaffold.** `cargo new`, add deps, wire `clap` subcommands as stubs,
       set up `lib.rs` error type, CI-ish make targets in README. DoD: both
       subcommands parse args and print "not yet implemented".
-- [ ] **P1 — space.** `SpaceId`, canonical string, `FromStr`/`Display`, parse tests
+- [x] **P1 — space.** `SpaceId`, canonical string, `FromStr`/`Display`, parse tests
       (a/b, multi-byte blocks).
-- [ ] **P2 — layout.** `Block` + CSV load + serpentine expansion to `Vec<Space>`;
+- [x] **P2 — layout.** `Block` + CSV load + serpentine expansion to `Vec<Space>`;
       `gen-layout` writes `spaces.json`. Tests: known (n→depth,face), n=1 at anchor,
       even & odd `n_max`.
-- [ ] **P3 — distance.** `perceived()` + `DistanceMatrix`; tests for symmetry and
+- [x] **P3 — distance.** `perceived()` + `DistanceMatrix`; tests for symmetry and
       penalty ordering.
-- [ ] **P4 — construct.** NN (+ multi-start). Test against a tiny known instance.
-- [ ] **P5 — local search.** 2-opt + Or-opt with incremental cost; fixed-endpoint
+- [x] **P4 — construct.** NN (+ multi-start). Test against a tiny known instance.
+- [x] **P5 — local search.** 2-opt + Or-opt with incremental cost; fixed-endpoint
       handling. Test: reaches optimum on ≤6-node instance.
-- [ ] **P6 — ILS + restarts.** double-bridge kick, acceptance, `rayon` parallel
+- [x] **P6 — ILS + restarts.** double-bridge kick, acceptance, `rayon` parallel
       restarts, deterministic seeds. Test: within tolerance on a TSPLIB grid.
-- [ ] **P7 — solve I/O + itinerary.** read want-list, match to layout (warn on
+- [x] **P7 — solve I/O + itinerary.** read want-list, match to layout (warn on
       misses), write `route.csv`, print grouped itinerary.
-- [ ] **P8 — polish.** flags (`--gamma`, penalties, `--start`, `--closed`,
+- [x] **P8 — polish.** flags (`--gamma`, penalties, `--start`, `--closed`,
       `--time-ms`), `--help` text, a sample `data/` set, optional criterion bench.
 
 ---
