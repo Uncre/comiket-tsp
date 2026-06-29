@@ -1,0 +1,8 @@
+id,building,hall,anchor_x,anchor_y,along,cross,n_max,face0_len,pitch,island_width
+E4-ア,East,4,10.0,0.0,S,E,48,,1.0,1.5
+E4-カ,East,4,13.0,0.0,S,E,40,,1.0,1.5
+E4-サ,East,4,16.0,0.0,S,E,30,16,1.0,1.5
+E5-ハ,East,5,10.0,-60.0,S,E,20,,1.0,1.5
+W1-あ,West,1,-200.0,0.0,S,E,48,,1.0,1.5
+W1-A,West,1,-203.0,0.0,S,E,16,,1.0,1.5
+W2-t,West,2,-200.0,-60.0,S,E,24,,1.0,1.5
