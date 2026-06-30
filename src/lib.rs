@@ -10,8 +10,8 @@ pub mod layout;
 pub mod solve;
 pub mod space;
 
-pub use distance::{DistanceMatrix, DistanceParams};
-pub use layout::{Block, Dir, Layout, Space};
+pub use distance::{DistanceMatrix, DistanceParams, HallDistances};
+pub use layout::{default_cluster, Block, BlockKind, Crossing, Dir, Layout, Space};
 pub use solve::{solve, SolveConfig, SolveOutcome};
 pub use space::{Building, Side, SpaceId};
 
@@ -32,7 +32,7 @@ pub enum CometError {
         reason: String,
     },
 
-    /// A `block_layout.csv` row was malformed or internally inconsistent.
+    /// A `block_layouts.csv` row was malformed or internally inconsistent.
     #[error("invalid block {id:?}: {reason}")]
     Block {
         /// The block id (or raw row) at fault.
@@ -40,6 +40,10 @@ pub enum CometError {
         /// Why the block was rejected.
         reason: String,
     },
+
+    /// A `hall_distances.csv` cell could not be parsed as a number.
+    #[error("invalid hall-distance value {0:?}")]
+    HallDistance(String),
 
     /// A want-list entry referenced a space absent from the layout artifact.
     #[error("want-list space not found in layout: {0}")]

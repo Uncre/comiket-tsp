@@ -1,5 +1,31 @@
+# --- Rust ---
 /target
+# Cargo.lock is kept (this crate ships a binary CLI).
 
-# Generated outputs (inputs live in data/)
+# --- Generated outputs ---
+# Inputs live in data/ (block_layouts.csv, hall_distances.csv, want_list.csv) and are
+# committed as the sample/contract set; everything below is produced by a run.
 /artifacts/
 /route.csv
+/out/
+# Scratch dirs used while verifying the generator.
+/out_check/
+
+# --- Python (tools/layout) ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Office / editor / OS cruft ---
+# Excel/Word lock files (e.g. ~$layout_C107.xlsx)
+~$*
+*.tmp
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

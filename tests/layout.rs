@@ -1,7 +1,12 @@
 //! Serpentine-expansion tests: known `(n → depth, face)`, anchor, and `island_len`.
 
-use comiket_tsp::layout::{Block, Dir, Layout, Space};
+use comiket_tsp::layout::{Block, BlockKind, Crossing, Dir, Layout, Space};
 use comiket_tsp::space::Building;
+
+/// Build a [`Crossing`] tersely for the assertions below.
+fn xc(along: f64, major: bool) -> Crossing {
+    Crossing { along, major }
+}
 
 /// A canonical test island: anchor at the origin, depth running +x, faces split +y.
 fn island(n_max: u16, face0_len: Option<u16>) -> Block {
@@ -13,10 +18,16 @@ fn island(n_max: u16, face0_len: Option<u16>) -> Block {
         anchor: (0.0, 0.0),
         along: Dir::E,
         cross: Dir::N,
+        along_deg: None,
+        cross_deg: None,
         n_max,
         face0_len,
         pitch: 1.0,
         island_width: 1.5,
+        kind: BlockKind::Island,
+        number_base: 0,
+        cluster: "E4-6".into(),
+        crossings: Vec::new(),
     }
 }
 
@@ -115,4 +126,70 @@ fn layout_json_roundtrips_schema() {
     assert_eq!(first.id, layout.spaces[0].id);
     assert_eq!(first.face, layout.spaces[0].face);
     assert_eq!(first.island_len, layout.spaces[0].island_len);
+    assert_eq!(first.cluster, "E4-6");
+    // Ends only: the near aisle (major) and the far turnaround (minor).
+    assert_eq!(first.crossings, vec![xc(0.0, true), xc(23.0, false)]);
+}
+
+#[test]
+fn wall_run_is_single_faced_and_linear() {
+    let mut wall = island(4, None);
+    wall.kind = BlockKind::Wall;
+
+    assert_eq!(wall.island_len(), 3.0); // all 4 desks on one face: (4-1) * 1.0
+    let spaces = wall.expand();
+    assert_eq!(spaces.len(), 8); // 4 numbers × 2 sides
+
+    // Every desk stays on face 0; depth increases linearly with the number.
+    for s in &spaces {
+        assert_eq!(s.face, 0, "{} should be on face 0", s.id);
+    }
+    let n1a = space(&spaces, "E4-ア-1a");
+    assert_eq!(n1a.along, 0.0);
+    let n4a = space(&spaces, "E4-ア-4a");
+    assert_eq!(n4a.along, 3.0);
+}
+
+#[test]
+fn wall_segment_offsets_numbers_and_spreads_over_span() {
+    // A 壁サー segment carrying numbers 23..39 (17 circles) spread 等間隔 over 32 m.
+    let mut seg = island(17, None);
+    seg.kind = BlockKind::Wall;
+    seg.number_base = 22; // local n=1 → global number 23
+    seg.pitch = 2.0; // span 34 m / 17 circles
+
+    let spaces = seg.expand();
+    // Numbering is continuous from the offset; local n=1 sits on the anchor.
+    let first = space(&spaces, "E4-ア-23a");
+    assert_eq!(first.number, 23);
+    assert_eq!(first.along, 0.0);
+    // Equal spacing: the 17th circle (global 39) is 16 steps of 2 m along.
+    let last = space(&spaces, "E4-ア-39a");
+    assert_eq!(last.number, 39);
+    assert_eq!(last.along, 32.0);
+}
+
+#[test]
+fn angle_override_places_islands_diagonally() {
+    let mut diag = island(4, None);
+    diag.along_deg = Some(45.0); // depth runs north-east at 45°
+
+    let spaces = diag.expand();
+    let n2a = space(&spaces, "E4-ア-2a"); // depth 2 → along = 1.0
+    let s = std::f64::consts::FRAC_1_SQRT_2; // cos(45°) = sin(45°)
+    assert!((n2a.x - s).abs() < 1e-9, "x = {}", n2a.x);
+    assert!((n2a.y - s).abs() < 1e-9, "y = {}", n2a.y);
+}
+
+#[test]
+fn mid_corridor_appears_in_crossings() {
+    let mut split = island(48, None);
+    split.crossings = vec![xc(12.0, true)]; // a 太通路 splits the prefix at along = 12
+
+    let spaces = split.expand();
+    // Every space carries the island ends plus the authored corridor.
+    assert_eq!(
+        spaces[0].crossings,
+        vec![xc(0.0, true), xc(23.0, false), xc(12.0, true)]
+    );
 }

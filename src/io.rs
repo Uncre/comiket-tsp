@@ -6,11 +6,12 @@ use std::path::Path;
 
 use serde::Serialize;
 
-use crate::distance::DistanceMatrix;
+use crate::distance::{DistanceMatrix, HallDistances};
 use crate::layout::{Block, BlockRow, Layout, Resolved, WantEntry};
 use crate::solve::SolveOutcome;
+use crate::CometError;
 
-/// Read and validate `block_layout.csv` into a list of [`Block`]s.
+/// Read and validate `block_layouts.csv` into a list of [`Block`]s.
 pub fn read_blocks(path: &Path) -> crate::Result<Vec<Block>> {
     let mut reader = csv::Reader::from_reader(BufReader::new(File::open(path)?));
     let mut blocks = Vec::new();
@@ -18,6 +19,58 @@ pub fn read_blocks(path: &Path) -> crate::Result<Vec<Block>> {
         blocks.push(Block::try_from(row?)?);
     }
     Ok(blocks)
+}
+
+/// Read a square-matrix `hall_distances.csv` into a [`HallDistances`].
+///
+/// The first column holds the row's cluster label and the header row the column labels;
+/// each cell is the perceived walking distance (metres) between the two clusters. Empty
+/// cells and the diagonal are skipped, and the table is treated as symmetric.
+pub fn read_hall_distances(path: &Path) -> crate::Result<HallDistances> {
+    let mut reader = csv::ReaderBuilder::new()
+        .has_headers(false)
+        .flexible(true)
+        .from_reader(BufReader::new(File::open(path)?));
+    let mut records = reader.records();
+    let header = match records.next() {
+        Some(record) => record?,
+        None => return Ok(HallDistances::new()),
+    };
+    let labels: Vec<String> = header
+        .iter()
+        .skip(1)
+        .map(|s| s.trim().to_string())
+        .collect();
+
+    let mut hall = HallDistances::new();
+    for record in records {
+        let record = record?;
+        let mut cells = record.iter();
+        let row_label = match cells.next() {
+            Some(label) => label.trim().to_string(),
+            None => continue,
+        };
+        if row_label.is_empty() {
+            continue;
+        }
+        for (k, cell) in cells.enumerate() {
+            let cell = cell.trim();
+            if cell.is_empty() {
+                continue;
+            }
+            let Some(col_label) = labels.get(k) else {
+                continue;
+            };
+            if col_label.is_empty() || *col_label == row_label {
+                continue;
+            }
+            let metres: f64 = cell
+                .parse()
+                .map_err(|_| CometError::HallDistance(cell.to_string()))?;
+            hall.insert(&row_label, col_label, metres);
+        }
+    }
+    Ok(hall)
 }
 
 /// Write a [`Layout`] artifact as pretty JSON, creating parent directories as needed.

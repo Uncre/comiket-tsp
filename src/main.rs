@@ -34,7 +34,7 @@ enum Command {
 /// Arguments for `gen-layout`.
 #[derive(Debug, Args)]
 struct GenLayoutArgs {
-    /// Hand-authored island table (`block_layout.csv`).
+    /// Hand-authored island table (`block_layouts.csv`).
     #[arg(long)]
     blocks: PathBuf,
     /// Output layout artifact (`spaces.json`).
@@ -54,6 +54,11 @@ struct SolveArgs {
     /// Want-list CSV (`space,name`).
     #[arg(long)]
     want: PathBuf,
+    /// Optional inter-cluster distance matrix (`hall_distances.csv`). When given, its
+    /// values are authoritative for cross-cluster legs, replacing the building/hall
+    /// penalties; omit it to use the legacy penalty-only model.
+    #[arg(long = "hall-distances")]
+    hall_distances: Option<PathBuf>,
     /// Output route CSV.
     #[arg(long)]
     out: PathBuf,
@@ -87,6 +92,10 @@ struct SolveArgs {
     /// Penalty for crossing to an adjacent island.
     #[arg(long = "pen-block", default_value_t = 5.0)]
     pen_block: f64,
+    /// Extra cost for crossing an island's faces through a 細通路 (minor aisle) rather
+    /// than a 太通路 (中央通路 / 大通路). `0` treats all aisles equally.
+    #[arg(long = "pen-corridor", default_value_t = 1.0)]
+    pen_corridor: f64,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -131,8 +140,13 @@ fn run_solve(args: SolveArgs) -> anyhow::Result<()> {
         pen_building: args.pen_building,
         pen_hall: args.pen_hall,
         pen_block: args.pen_block,
+        pen_corridor: args.pen_corridor,
     };
-    let matrix = DistanceMatrix::build(&resolved.spaces, &params);
+    let hall = match &args.hall_distances {
+        Some(path) => Some(io::read_hall_distances(path)?),
+        None => None,
+    };
+    let matrix = DistanceMatrix::build(&resolved.spaces, &params, hall.as_ref());
 
     let start = match &args.start {
         Some(s) => Some(resolve_start(&resolved, s)?),
