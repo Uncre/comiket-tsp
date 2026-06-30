@@ -95,23 +95,45 @@ fn manhattan(a: &Space, b: &Space) -> f64 {
 /// (a 太通路 is free). Same-face legs run straight down the aisle.
 pub fn intra_island(a: &Space, b: &Space, pen_corridor: f64) -> f64 {
     let dcross = (a.cross - b.cross).abs();
-    if a.face == b.face {
-        return (a.along - b.along).abs() + dcross;
+    match chosen_crossing(a, b, pen_corridor) {
+        // Same face: straight down the aisle.
+        None => (a.along - b.along).abs() + dcross,
+        // Opposite faces: round the chosen crossing (its along-detour) then cross the gap.
+        Some((_, detour)) => detour + dcross,
     }
-    let detour = if a.crossings.is_empty() {
+}
+
+/// The along position of the face-crossing the cost model uses for an opposite-face leg
+/// on the same island, or `None` when the two spaces share a face (straight down the
+/// aisle, no crossing). Shares [`chosen_crossing`] with [`intra_island`] so the route
+/// polyline always runs through the exact crossing the cost was charged for.
+pub fn intra_island_crossing(a: &Space, b: &Space, pen_corridor: f64) -> Option<f64> {
+    chosen_crossing(a, b, pen_corridor).map(|(along, _)| along)
+}
+
+/// The cheapest face-crossing for an opposite-face same-island leg: `(along, detour)`,
+/// where `detour` is the along-distance cost (with corridor penalty, excluding the cross
+/// gap). `None` when the spaces share a face. The single source of truth behind both
+/// [`intra_island`] (cost) and [`intra_island_crossing`] (geometry).
+fn chosen_crossing(a: &Space, b: &Space, pen_corridor: f64) -> Option<(f64, f64)> {
+    if a.face == b.face {
+        return None;
+    }
+    if a.crossings.is_empty() {
         // Legacy fallback: the two island ends only (both treated as cheap aisles).
         let l = a.island_len;
-        (a.along + b.along).min((l - a.along) + (l - b.along))
-    } else {
-        a.crossings
-            .iter()
-            .map(|c| {
-                let pen = if c.major { 0.0 } else { pen_corridor };
-                (a.along - c.along).abs() + (b.along - c.along).abs() + pen
-            })
-            .fold(f64::INFINITY, f64::min)
-    };
-    detour + dcross
+        let near = a.along + b.along; // cross at along = 0
+        let far = (l - a.along) + (l - b.along); // cross at along = l
+        return Some(if near <= far { (0.0, near) } else { (l, far) });
+    }
+    a.crossings
+        .iter()
+        .map(|c| {
+            let pen = if c.major { 0.0 } else { pen_corridor };
+            let cost = (a.along - c.along).abs() + (b.along - c.along).abs() + pen;
+            (c.along, cost)
+        })
+        .min_by(|x, y| x.1.total_cmp(&y.1))
 }
 
 /// Perceived walking cost between two spaces under `params`.
@@ -244,6 +266,8 @@ mod tests {
             cross,
             face,
             island_len,
+            along_unit: Some((1.0, 0.0)),
+            cross_unit: Some((0.0, 1.0)),
             cluster: default_cluster(building, hall),
             crossings: Vec::new(),
         }

@@ -7,11 +7,13 @@
 pub mod distance;
 pub mod io;
 pub mod layout;
+pub mod path;
 pub mod solve;
 pub mod space;
 
 pub use distance::{DistanceMatrix, DistanceParams, HallDistances};
 pub use layout::{default_cluster, Block, BlockKind, Crossing, Dir, Layout, Space};
+pub use path::{build_route_path, LegKind, PathLeg, RoutePath};
 pub use solve::{solve, SolveConfig, SolveOutcome};
 pub use space::{Building, Side, SpaceId};
 

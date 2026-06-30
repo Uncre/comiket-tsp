@@ -62,6 +62,11 @@ struct SolveArgs {
     /// Output route CSV.
     #[arg(long)]
     out: PathBuf,
+    /// Optional output for the walked route as per-leg coordinate polylines (JSON), for
+    /// drawing the path on a map. Same-island legs route through the chosen aisle; other
+    /// legs are straight-segment approximations (see the JSON's `kind` field).
+    #[arg(long = "out-path")]
+    out_path: Option<PathBuf>,
     /// RNG seed; same seed + inputs ⇒ identical route (with the time limit disabled).
     #[arg(long, default_value_t = 42)]
     seed: u64,
@@ -164,6 +169,19 @@ fn run_solve(args: SolveArgs) -> anyhow::Result<()> {
 
     let legs = io::route_legs(&resolved, &outcome, &matrix, args.closed);
     io::write_route(&args.out, &legs)?;
+
+    if let Some(path_out) = &args.out_path {
+        let route_path = comiket_tsp::build_route_path(
+            &resolved,
+            &outcome,
+            &matrix,
+            params.pen_corridor,
+            args.closed,
+            layout.event.clone(),
+        );
+        io::write_route_path(path_out, &route_path)?;
+        println!("Wrote route polyline to {}", path_out.display());
+    }
 
     print_itinerary(&resolved, &outcome, args.closed);
     println!(

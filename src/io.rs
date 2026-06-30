@@ -8,6 +8,7 @@ use serde::Serialize;
 
 use crate::distance::{DistanceMatrix, HallDistances};
 use crate::layout::{Block, BlockRow, Layout, Resolved, WantEntry};
+use crate::path::RoutePath;
 use crate::solve::SolveOutcome;
 use crate::CometError;
 
@@ -169,5 +170,17 @@ pub fn write_route(path: &Path, legs: &[RouteLeg]) -> crate::Result<()> {
         writer.serialize(leg)?;
     }
     writer.flush()?;
+    Ok(())
+}
+
+/// Write the route polyline as pretty JSON, creating parent directories as needed.
+pub fn write_route_path(path: &Path, route: &RoutePath) -> crate::Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+    let writer = BufWriter::new(File::create(path)?);
+    serde_json::to_writer_pretty(writer, route)?;
     Ok(())
 }

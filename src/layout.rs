@@ -326,6 +326,8 @@ impl Block {
                     cross,
                     face,
                     island_len,
+                    along_unit: Some((along_x, along_y)),
+                    cross_unit: Some((cross_x, cross_y)),
                     cluster: self.cluster.clone(),
                     crossings: crossings.clone(),
                 });
@@ -379,6 +381,14 @@ pub struct Space {
     pub face: u8,
     /// The island's far-end along-position (metres); identical for every space in it.
     pub island_len: f64,
+    /// Unit vector of the island's along-axis in the global frame, for mapping local
+    /// `(along, cross)` waypoints back to global `(x, y)`. Identical for every space in
+    /// the island. `None` in artifacts written before this field existed.
+    #[serde(default)]
+    pub along_unit: Option<(f64, f64)>,
+    /// Unit vector of the island's cross-axis in the global frame (see [`Space::along_unit`]).
+    #[serde(default)]
+    pub cross_unit: Option<(f64, f64)>,
     /// Hall-cluster id (e.g. `E4-6`) for the inter-hall distance matrix.
     #[serde(default)]
     pub cluster: String,

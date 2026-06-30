@@ -7,6 +7,7 @@
 # committed as the sample/contract set; everything below is produced by a run.
 /artifacts/
 /route.csv
+/route_path.json
 /out/
 # Scratch dirs used while verifying the generator.
 /out_check/
